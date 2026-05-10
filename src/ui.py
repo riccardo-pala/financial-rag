@@ -142,6 +142,9 @@ def init_chat_state():
     if "pending_prompt" not in st.session_state:
         st.session_state.pending_prompt = None
 
+    if "is_generating" not in st.session_state:
+        st.session_state.is_generating = False
+
 
 def render_quick_prompts():
     prompt_cols = st.columns(len(EXAMPLE_PROMPTS))
@@ -172,13 +175,27 @@ def render_chat_response(qa_chain, prompt):
             st.session_state.messages.append({"role": "assistant", "content": response})
             return
 
-        with st.spinner("Searching the financial documents..."):
-            try:
-                response = qa_chain.invoke(prompt)
-                st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
-            except Exception as exc:
-                st.error(f"An error occurred: {exc}")
+        stop_requested = st.button("Stop generation", key="stop_generation", use_container_width=False)
+        if stop_requested:
+            st.session_state.is_generating = False
+            st.info("Generation stopped.")
+            st.stop()
+
+        response_placeholder = st.empty()
+        response = ""
+        st.session_state.is_generating = True
+
+        try:
+            with st.spinner("Searching the financial documents..."):
+                for chunk in qa_chain.stream(prompt):
+                    response += chunk
+                    response_placeholder.markdown(response)
+
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        except Exception as exc:
+            st.error(f"An error occurred: {exc}")
+        finally:
+            st.session_state.is_generating = False
 
 
 def handle_chat(qa_chain):
@@ -187,6 +204,7 @@ def handle_chat(qa_chain):
 
     prompt = get_current_prompt()
     if not prompt:
+        st.session_state.is_generating = False
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
