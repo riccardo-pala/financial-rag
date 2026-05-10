@@ -143,7 +143,8 @@ The repository includes a sample financial PDF, so you can test the app immediat
 
 **PDF upload and index rebuild workflow**
 ![Document management](docs/screenshots/document-management.png)
-![Document management after upload](docs/screenshots/document-management-2.png)
+![Reindexing](docs/screenshots/reindexing.png)
+![After Reindexing](docs/screenshots/after-reindexing.png)
 
 **Example RAG answer**
 ![Example RAG answer](docs/screenshots/rag-answer.png)

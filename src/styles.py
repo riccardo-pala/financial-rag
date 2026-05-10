@@ -180,6 +180,14 @@ APP_CSS = """
     border: 1px solid var(--line);
     color: var(--ink);
 }
+[data-testid="stAlert"] {
+    color: var(--ink) !important;
+}
+[data-testid="stAlert"] *,
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] * {
+    color: var(--ink) !important;
+}
 div[data-baseweb="popover"] ul,
 div[data-baseweb="popover"] li,
 div[data-baseweb="menu"],
