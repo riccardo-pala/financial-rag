@@ -1,0 +1,27 @@
+# LangChain e AI/ML
+langchain==1.2.18
+langchain-community==0.4.1
+langchain-core==1.3.3
+langchain-ollama==1.1.0
+langchain-text-splitters==1.1.2
+langsmith==0.8.3
+
+# Vector Database
+chromadb==1.5.9
+
+# Document Processing
+pypdf==6.11.0
+
+# LLM Runtime
+ollama==0.6.2
+
+# Web UI
+streamlit>=1.0.0
+
+# Data Processing
+numpy>=1.0.0
+pydantic>=2.0.0
+
+# Utilities
+python-dotenv==1.2.2
+requests>=2.0.0

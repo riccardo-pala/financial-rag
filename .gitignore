@@ -68,3 +68,7 @@ Thumbs.db
 .pylintrc
 .flake8
 pyproject.toml.local
+
+# Database Vettoriale e Dati
+chroma_db/
+data/
