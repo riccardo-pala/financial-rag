@@ -6,6 +6,8 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
 
 import os
+import html
+from pathlib import Path
 
 # --- CONSTANTS & PATHS ---
 # Find the src folder, then move one level up to the project root.
@@ -18,9 +20,168 @@ LLM_MODEL = "llama3"
 K_RESULTS = 4
 
 # --- UI CONFIGURATION ---
-st.set_page_config(page_title="Financial RAG Assistant", page_icon="🏦")
-st.title("🏦 Financial RAG Assistant")
-st.markdown("Ask me anything about the financial documents you loaded.")
+st.set_page_config(
+    page_title="Financial RAG Assistant",
+    page_icon="🏦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+    <style>
+    .main .block-container {
+        max-width: 980px;
+        padding-top: 2rem;
+    }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #111827 0%, #172033 100%);
+    }
+    [data-testid="stSidebar"] * {
+        color: #f8fafc;
+    }
+    [data-testid="stSidebar"] [data-testid="stMetricValue"] {
+        color: #ffffff;
+    }
+    .app-kicker {
+        color: #64748b;
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.2rem;
+        text-transform: uppercase;
+    }
+    .app-title {
+        color: #0f172a;
+        font-size: 2.4rem;
+        font-weight: 800;
+        letter-spacing: 0;
+        line-height: 1.08;
+        margin-bottom: 0.35rem;
+    }
+    .app-subtitle {
+        color: #475569;
+        font-size: 1rem;
+        line-height: 1.6;
+        margin-bottom: 1.4rem;
+    }
+    .doc-row {
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 8px;
+        margin-bottom: 0.45rem;
+        padding: 0.65rem 0.7rem;
+    }
+    .doc-name {
+        color: #ffffff;
+        font-size: 0.88rem;
+        font-weight: 700;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .doc-meta {
+        color: #cbd5e1;
+        font-size: 0.76rem;
+        margin-top: 0.22rem;
+    }
+    .status-pill {
+        border-radius: 999px;
+        display: inline-block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-bottom: 0.6rem;
+        padding: 0.28rem 0.65rem;
+    }
+    .status-ready {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .status-missing {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    div[data-testid="stChatMessage"] {
+        border-radius: 10px;
+        padding: 0.55rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def format_file_size(size_bytes):
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def list_loaded_documents():
+    data_path = Path(DATA_FOLDER)
+    if not data_path.exists():
+        return []
+
+    documents = []
+    for file_path in sorted(data_path.glob("*.pdf")):
+        documents.append(
+            {
+                "name": file_path.name,
+                "size": format_file_size(file_path.stat().st_size),
+            }
+        )
+    return documents
+
+
+def render_sidebar():
+    documents = list_loaded_documents()
+    db_ready = Path(DB_FOLDER, "chroma.sqlite3").exists()
+
+    with st.sidebar:
+        st.markdown("## Financial RAG")
+        status_class = "status-ready" if db_ready else "status-missing"
+        status_text = "Index ready" if db_ready else "Index missing"
+        st.markdown(
+            f'<span class="status-pill {status_class}">{status_text}</span>',
+            unsafe_allow_html=True,
+        )
+
+        col_a, col_b = st.columns(2)
+        col_a.metric("PDFs", len(documents))
+        col_b.metric("Chunks", K_RESULTS)
+
+        st.divider()
+        st.markdown("### Documents")
+
+        if documents:
+            for document in documents:
+                document_name = html.escape(document["name"])
+                document_size = html.escape(document["size"])
+                st.markdown(
+                    f"""
+                    <div class="doc-row">
+                        <div class="doc-name">{document_name}</div>
+                        <div class="doc-meta">{document_size} - PDF</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("No PDF files found in data/.")
+
+        st.divider()
+        st.caption(f"LLM: {LLM_MODEL}")
+        st.caption(f"Embeddings: {EMBEDDING_MODEL}")
+
+
+render_sidebar()
+
+st.markdown('<div class="app-kicker">Local financial document intelligence</div>', unsafe_allow_html=True)
+st.markdown('<div class="app-title">Financial RAG Assistant</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="app-subtitle">Ask grounded questions over your indexed financial PDFs. Answers stay tied to the local document context.</div>',
+    unsafe_allow_html=True,
+)
 
 # --- RAG SYSTEM INITIALIZATION ---
 # st.cache_resource loads the database and model only once.
@@ -72,13 +233,39 @@ qa_chain = load_rag_chain()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "pending_prompt" not in st.session_state:
+    st.session_state.pending_prompt = None
+
+with st.sidebar:
+    if st.button("Clear chat", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.pending_prompt = None
+        st.rerun()
+
+example_prompts = [
+    "Summarize the key financial risks.",
+    "What macroeconomic assumptions are mentioned?",
+    "List the most important figures and explain their context.",
+]
+
+with st.container():
+    prompt_cols = st.columns(len(example_prompts))
+    for col, example in zip(prompt_cols, example_prompts):
+        if col.button(example, use_container_width=True):
+            st.session_state.pending_prompt = example
+            st.rerun()
+
 # Display previous messages.
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # User input.
-if prompt := st.chat_input("Example: What are the main risk factors mentioned?"):
+chat_prompt = st.chat_input("Example: What are the main risk factors mentioned?")
+prompt = st.session_state.pending_prompt or chat_prompt
+if prompt:
+    st.session_state.pending_prompt = None
+
     # Save and display the user message.
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
